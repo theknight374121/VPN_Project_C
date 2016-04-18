@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 	struct ifreq ifr;
 	int fd, s, fromlen, soutlen, port, PORT, l;
 	char c, *p, *ip;
-	char buf[1800];
+	char buf[2000];
 	fd_set fdset;
 	
 	  //Encryption variables
@@ -71,6 +71,27 @@ int main(int argc, char *argv[])
 	 unsigned char md_value[EVP_MAX_MD_SIZE];
 	 unsigned char md_value1[EVP_MAX_MD_SIZE];
 	 int md_len,md_len1, j;
+
+	//username and password
+	unsigned char username[50];
+	unsigned char password[50];
+	unsigned char sendcred[100];
+
+	//client side authentication
+	FILE *fp;
+	int flag=0;
+	unsigned char storeduser[50];
+	unsigned char storedpwd[65];
+	unsigned char storedsalt[10];
+	unsigned char combpwd[60];
+	EVP_MD_CTX *mdctx;
+	 const EVP_MD *md;
+	 char storedig[64];
+	 char * storeptr;
+	 char * saltptr;
+	 char storesalt[5];
+	 unsigned char md_value2[EVP_MAX_MD_SIZE];
+	 int md_len2;
 
 	  ctx = EVP_CIPHER_CTX_new();
 	  dctx = EVP_CIPHER_CTX_new();
@@ -127,11 +148,81 @@ int main(int argc, char *argv[])
 	if (MODE == 1) {
 		while(1) {
 			l = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
+			printf("gotpacket:%s\n",buf);
 			if (l < 0) PERROR("recvfrom");
-			if (strncmp(MAGIC_WORD, buf, sizeof(MAGIC_WORD)) == 0)
-				break;
-			printf("Bad magic word from %s:%i\n", 
+		///////////////////////////////////////////////////////////////////
+		/////////	client side authentication		///////////
+		///////////////////////////////////////////////////////////////////
+			char *p;
+			p = strtok(buf, "@");
+			if(p)	strcpy(username,p);
+			p = strtok(NULL, "@");
+			if(p)	strcpy(password,p);
+			printf("username:%s\npasssword:%s\n",username,password);
+			   if( (fp=fopen("userdb.txt","r")) == NULL )
+			     {printf("File can not open !\n"); exit(1);}
+			   
+				while( !feof(fp) )                 
+				   {
+				      	fscanf(fp,"%s %s %s",storeduser,storedsalt,storedpwd);
+					storedpwd[64]='\0';
+				
+				      if(strcmp(storeduser,username)==0)
+				      {
+					 	//compose the combined password
+						for(i=0;i<10;i++){
+							combpwd[i]=storedsalt[i];
+						}
+						for(i=0;i<strlen(password);i++){
+							combpwd[i+10]=password[i];
+						}
+						combpwd[10+strlen(password)]='\0';
+
+						//set value of message digest used
+						 md = EVP_sha256();
+						 if(!md) {
+							printf("Unknown message digest %s\n", "md5");
+							exit(1);
+						 }
+
+						//Hash the initial message to use the hash for further calculations
+						 mdctx = EVP_MD_CTX_create();
+						 EVP_DigestInit_ex(mdctx, md, NULL);
+						 EVP_DigestUpdate(mdctx, combpwd, strlen(combpwd));
+						 EVP_DigestFinal_ex(mdctx, md_value2, &md_len2);
+						 EVP_MD_CTX_destroy(mdctx);
+
+						//Printing the calculated hash.
+						storeptr=storedig;
+							 
+						for(i = 0; i < md_len2; i++){
+							storeptr+=sprintf(storeptr,"%02x", md_value2[i]);
+						}
+						storedig[64]='\0';
+
+						if(strcmp(storedpwd,storedig)==0){
+							printf("password matched!\n");
+							flag=1;
+							break;
+						}
+						else{
+							printf("incorrect password\n");
+							flag=1;
+						}
+				      }
+				      
+				   }
+					if(flag==0) printf("no usr preseent\n");
+	
+			   fclose(fp);                         
+			
+			printf("Bad password from %s:%i\n", 
 			       inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));
+
+		///////////////////////////////////////////////////////////////////
+		/////////	client side authentication done		///////////
+		///////////////////////////////////////////////////////////////////
+		
 		} 
 		l = sendto(s, MAGIC_WORD, sizeof(MAGIC_WORD), 0, (struct sockaddr *)&from, fromlen);
 		if (l < 0) PERROR("sendto");
@@ -139,8 +230,31 @@ int main(int argc, char *argv[])
 		from.sin_family = AF_INET;
 		from.sin_port = htons(port);
 		inet_aton(ip, &from.sin_addr);
-		l =sendto(s, MAGIC_WORD, sizeof(MAGIC_WORD), 0, (struct sockaddr *)&from, sizeof(from));
-		if (l < 0) PERROR("sendto");
+		///////////////////////////////////////////////////////////////////
+		/////////	asking user for username and password	///////////
+		///////////////////////////////////////////////////////////////////
+		
+		printf("Enter username:");
+		scanf("%s",username);
+		printf("Enter Password:");
+		scanf("%s",password);
+		printf("\n");
+		for(i=0;i<strlen(username);i++){
+			sendcred[i]=username[i];
+		}
+		sendcred[strlen(username)]="@";
+		int credptr = strlen(username)+1;
+		for(i=0;i<strlen(password);i++){
+			sendcred[credptr+i]=password[i];
+		}
+		sendcred[credptr+strlen(password)]='\0';
+		printf("sent:%s",sendcred);
+		
+		///////////////////////////////////////////////////////////////////
+		/////////	done asking user for username and password	///
+		///////////////////////////////////////////////////////////////////
+		l =sendto(s, sendcred, sizeof(sendcred), 0, (struct sockaddr *)&from, sizeof(from));
+		if (l < 0) PERROR("sendto"); else printf("sent successfully");
 		l = recvfrom(s,buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
 		if (l < 0) PERROR("recvfrom");
 		if (strncmp(MAGIC_WORD, buf, sizeof(MAGIC_WORD) != 0))
