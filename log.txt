@@ -1,0 +1,23 @@
+commit 870d4e072d4c61fcdde4971b63cbcbc61521f978
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Mon Apr 18 13:26:06 2016 -0700
+
+    added some milestone 3 code. Client authentication. But not yet complete
+
+commit 4f54fb451dc60d9ea96db9757306d54523455a32
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Sun Apr 17 19:37:41 2016 -0700
+
+    moved my prog to tunproxy. Everything works fine.
+
+commit 6ec491601642df06c530de0cd486c5a3167ba1b3
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Sun Apr 17 18:07:06 2016 -0700
+
+    milestone 1 fixed with change in adapter settings
+
+commit aa484eec5270f2b94544c2a97e68f74976063ee9
+Author: Seed <seed@ubuntu.(none)>
+Date:   Sun Apr 17 13:02:07 2016 -0700
+
+    Completed till milestone2 and did some Initial PKI tasks

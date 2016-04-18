@@ -203,7 +203,8 @@ int main(int argc, char *argv[])
 						if(strcmp(storedpwd,storedig)==0){
 							printf("password matched!\n");
 							flag=1;
-							break;
+						//need to put a goto here
+							goto clientdone;
 						}
 						else{
 							printf("incorrect password\n");
@@ -216,14 +217,16 @@ int main(int argc, char *argv[])
 	
 			   fclose(fp);                         
 			
-			printf("Bad password from %s:%i\n", 
-			       inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));
+			if(flag==0) {printf("Bad password from %s:%i\n", 
+			       inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));}
 
 		///////////////////////////////////////////////////////////////////
 		/////////	client side authentication done		///////////
 		///////////////////////////////////////////////////////////////////
-		
+		printf("Client side authenticated");
 		} 
+		clientdone:
+		printf("reached here");
 		l = sendto(s, MAGIC_WORD, sizeof(MAGIC_WORD), 0, (struct sockaddr *)&from, fromlen);
 		if (l < 0) PERROR("sendto");
 	} else {
@@ -242,7 +245,7 @@ int main(int argc, char *argv[])
 		for(i=0;i<strlen(username);i++){
 			sendcred[i]=username[i];
 		}
-		sendcred[strlen(username)]="@";
+		sendcred[strlen(username)]='@';
 		int credptr = strlen(username)+1;
 		for(i=0;i<strlen(password);i++){
 			sendcred[credptr+i]=password[i];
@@ -254,7 +257,7 @@ int main(int argc, char *argv[])
 		/////////	done asking user for username and password	///
 		///////////////////////////////////////////////////////////////////
 		l =sendto(s, sendcred, sizeof(sendcred), 0, (struct sockaddr *)&from, sizeof(from));
-		if (l < 0) PERROR("sendto"); else printf("sent successfully");
+		if (l < 0) PERROR("sendto");
 		l = recvfrom(s,buf, sizeof(buf), 0, (struct sockaddr *)&from, &fromlen);
 		if (l < 0) PERROR("recvfrom");
 		if (strncmp(MAGIC_WORD, buf, sizeof(MAGIC_WORD) != 0))
