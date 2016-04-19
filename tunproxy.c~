@@ -1,20 +1,3 @@
-/*
- * tunproxy.c --- small demo program for tunneling over UDP with tun/tap
- *
- * Copyright (C) 2003  Philippe Biondi <phil@secdev.org>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- */
-
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -65,7 +48,7 @@ int main(int argc, char *argv[])
 	  unsigned char iv[16] = "";  
 	  EVP_CIPHER_CTX *ctx,*dctx;
 
-	 //hashing 
+	 //HMAC variables 
 	  char printbuf[65];
 	 char printbuf2[65];
 	 unsigned char md_value[EVP_MAX_MD_SIZE];
@@ -84,6 +67,8 @@ int main(int argc, char *argv[])
 	unsigned char storedpwd[65];
 	unsigned char storedsalt[10];
 	unsigned char combpwd[60];
+
+	//client side auth hash variables. SHA256	
 	EVP_MD_CTX *mdctx;
 	 const EVP_MD *md;
 	 char storedig[64];
@@ -225,6 +210,7 @@ int main(int argc, char *argv[])
 		///////////////////////////////////////////////////////////////////
 		printf("Client side authenticated");
 		} 
+		clientdone:
 		printf("reached here");
 		l = sendto(s, MAGIC_WORD, sizeof(MAGIC_WORD), 0, (struct sockaddr *)&from, fromlen);
 		if (l < 0) PERROR("sendto");
