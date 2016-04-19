@@ -63,96 +63,96 @@ ERR_print_errors_fp(stderr);
 exit(2);
 }
 
- //this verify should be set to none so that server doesn't ask for certificates from client
-  SSL_CTX_set_verify(s_ctx,SSL_VERIFY_NONE,NULL); /* whether verify the certificate */
-  SSL_CTX_load_verify_locations(s_ctx,CACERT,NULL);
-  
-  if (SSL_CTX_use_certificate_file(s_ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
-    ERR_print_errors_fp(stderr);
-    exit(3);
-  }
-  if (SSL_CTX_use_PrivateKey_file(s_ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
-    ERR_print_errors_fp(stderr);
-    exit(4);
-  }
+//this verify should be set to none so that server doesn't ask for certificates from client
+SSL_CTX_set_verify(s_ctx,SSL_VERIFY_NONE,NULL); /* whether verify the certificate */
+SSL_CTX_load_verify_locations(s_ctx,CACERT,NULL);
 
-  if (!SSL_CTX_check_private_key(s_ctx)) {
-    fprintf(stderr,"Private key does not match the certificate public key\n");
-    exit(5);
-  }
+if (SSL_CTX_use_certificate_file(s_ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
+ERR_print_errors_fp(stderr);
+exit(3);
+}
+if (SSL_CTX_use_PrivateKey_file(s_ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
+ERR_print_errors_fp(stderr);
+exit(4);
+}
 
-  /* ----------------------------------------------- */
-  /* Prepare TCP socket for receiving connections */
+if (!SSL_CTX_check_private_key(s_ctx)) {
+fprintf(stderr,"Private key does not match the certificate public key\n");
+exit(5);
+}
 
-  listen_sd = socket (AF_INET, SOCK_STREAM, 0);   CHK_ERR(listen_sd, "socket");
-  
-  memset (&sa_serv, '\0', sizeof(sa_serv));
-  sa_serv.sin_family      = AF_INET;
-  sa_serv.sin_addr.s_addr = INADDR_ANY;
-  sa_serv.sin_port        = htons (1111);          /* Server Port number */
-  
-  err = bind(listen_sd, (struct sockaddr*) &sa_serv,
-	     sizeof (sa_serv));                   CHK_ERR(err, "bind");
-	     
-  /* Receive a TCP connection. */
-	     
-  err = listen (listen_sd, 5);                    CHK_ERR(err, "listen");
-  
-  client_len = sizeof(sa_cli);
-  s_sd = accept (listen_sd, (struct sockaddr*) &sa_cli, &client_len);
-  CHK_ERR(s_sd, "accept");
-  close (listen_sd);
+/* ----------------------------------------------- */
+/* Prepare TCP socket for receiving connections */
 
-  printf ("Connection from %lx, port %x\n",
-	  sa_cli.sin_addr.s_addr, sa_cli.sin_port);
-  
-  /* ----------------------------------------------- */
-  /* TCP connection is ready. Do server side SSL. */
+listen_sd = socket (AF_INET, SOCK_STREAM, 0);   CHK_ERR(listen_sd, "socket");
 
-  s_ssl = SSL_new (s_ctx);                           CHK_NULL(s_ssl);
-  SSL_set_fd (s_ssl, s_sd);
-  err = SSL_accept (s_ssl);                        CHK_SSL(err);
-  
-  /* Get the cipher - opt */
-  
-  printf ("SSL connection using %s\n", SSL_get_cipher (s_ssl));
-  
-  /* Get client's certificate (note: beware of dynamic allocation) - opt */
+memset (&sa_serv, '\0', sizeof(sa_serv));
+sa_serv.sin_family      = AF_INET;
+sa_serv.sin_addr.s_addr = INADDR_ANY;
+sa_serv.sin_port        = htons (1111);          /* Server Port number */
 
-  client_cert = SSL_get_peer_certificate (s_ssl);
-  if (client_cert != NULL) {
-    printf ("Client certificate:\n");
-    
-    s_str = X509_NAME_oneline (X509_get_subject_name (client_cert), 0, 0);
-    CHK_NULL(s_str);
-    printf ("\t subject: %s\n", s_str);
-    OPENSSL_free (s_str);
-    
-    s_str = X509_NAME_oneline (X509_get_issuer_name  (client_cert), 0, 0);
-    CHK_NULL(s_str);
-    printf ("\t issuer: %s\n", s_str);
-    OPENSSL_free (s_str);
-    
-    /* We could do all sorts of certificate verification stuff here before
-       deallocating the certificate. */
-    
-    X509_free (client_cert);
-  } else
-    printf ("Client does not have certificate.\n");
+err = bind(listen_sd, (struct sockaddr*) &sa_serv,
+     sizeof (sa_serv));                   CHK_ERR(err, "bind");
+     
+/* Receive a TCP connection. */
+     
+err = listen (listen_sd, 5);                    CHK_ERR(err, "listen");
 
-  /* DATA EXCHANGE - Receive message and send reply. */
+client_len = sizeof(sa_cli);
+s_sd = accept (listen_sd, (struct sockaddr*) &sa_cli, &client_len);
+CHK_ERR(s_sd, "accept");
+close (listen_sd);
 
-  err = SSL_read (s_ssl, buf, sizeof(buf) - 1);                   CHK_SSL(err);
-  buf[err] = '\0';
-  printf ("Got %d chars:'%s'\n", err, buf);
-  
-  err = SSL_write (s_ssl, "I hear you.", strlen("I hear you."));  CHK_SSL(err);
+printf ("Connection from %lx, port %x\n",
+  sa_cli.sin_addr.s_addr, sa_cli.sin_port);
 
-  /* Clean up. */
+/* ----------------------------------------------- */
+/* TCP connection is ready. Do server side SSL. */
 
-  close (s_sd);
-  SSL_free (s_ssl);
-  SSL_CTX_free (s_ctx);
+s_ssl = SSL_new (s_ctx);                           CHK_NULL(s_ssl);
+SSL_set_fd (s_ssl, s_sd);
+err = SSL_accept (s_ssl);                        CHK_SSL(err);
+
+/* Get the cipher - opt */
+
+printf ("SSL connection using %s\n", SSL_get_cipher (s_ssl));
+
+/* Get client's certificate (note: beware of dynamic allocation) - opt */
+
+client_cert = SSL_get_peer_certificate (s_ssl);
+if (client_cert != NULL) {
+printf ("Client certificate:\n");
+
+s_str = X509_NAME_oneline (X509_get_subject_name (client_cert), 0, 0);
+CHK_NULL(s_str);
+printf ("\t subject: %s\n", s_str);
+OPENSSL_free (s_str);
+
+s_str = X509_NAME_oneline (X509_get_issuer_name  (client_cert), 0, 0);
+CHK_NULL(s_str);
+printf ("\t issuer: %s\n", s_str);
+OPENSSL_free (s_str);
+
+/* We could do all sorts of certificate verification stuff here before
+deallocating the certificate. */
+
+X509_free (client_cert);
+} else
+printf ("Client does not have certificate.\n");
+
+/* DATA EXCHANGE - Receive message and send reply. */
+
+err = SSL_read (s_ssl, buf, sizeof(buf) - 1);                   CHK_SSL(err);
+buf[err] = '\0';
+printf ("Got %d chars:'%s'\n", err, buf);
+
+err = SSL_write (s_ssl, "I hear you.", strlen("I hear you."));  CHK_SSL(err);
+
+/* Clean up. */
+
+close (s_sd);
+SSL_free (s_ssl);
+SSL_CTX_free (s_ctx);
 
   return 0;
 }
