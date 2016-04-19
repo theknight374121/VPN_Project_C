@@ -39,44 +39,44 @@
 
 int main ()
 {
-  int err;
-  int listen_sd;
-  int sd;
-  struct sockaddr_in sa_serv;
-  struct sockaddr_in sa_cli;
-  size_t client_len;
-  SSL_CTX* ctx;
-  SSL*     ssl;
-  X509*    client_cert;
-  char*    str;
-  char     buf [4096];
-  SSL_METHOD *meth;
-  
-  /* SSL preliminaries. We keep the certificate and key with the context. */
+int err;
+int listen_sd;
+int s_sd;
+struct sockaddr_in sa_serv;
+struct sockaddr_in sa_cli;
+size_t client_len;
+SSL_CTX* s_ctx;
+SSL*     s_ssl;
+X509*    client_cert;
+char*    s_str;
+char     buf [4096];
+SSL_METHOD *s_meth;
 
-  SSL_load_error_strings();
-  SSLeay_add_ssl_algorithms();
-  meth = SSLv23_server_method();
-  ctx = SSL_CTX_new (meth);
-  if (!ctx) {
-    ERR_print_errors_fp(stderr);
-    exit(2);
-  }
+/* SSL preliminaries. We keep the certificate and key with the context. */
+
+SSL_load_error_strings();
+SSLeay_add_ssl_algorithms();
+s_meth = SSLv23_server_method();
+s_ctx = SSL_CTX_new (s_meth);
+if (!s_ctx) {
+ERR_print_errors_fp(stderr);
+exit(2);
+}
 
  //this verify should be set to none so that server doesn't ask for certificates from client
-  SSL_CTX_set_verify(ctx,SSL_VERIFY_NONE,NULL); /* whether verify the certificate */
-  SSL_CTX_load_verify_locations(ctx,CACERT,NULL);
+  SSL_CTX_set_verify(s_ctx,SSL_VERIFY_NONE,NULL); /* whether verify the certificate */
+  SSL_CTX_load_verify_locations(s_ctx,CACERT,NULL);
   
-  if (SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
+  if (SSL_CTX_use_certificate_file(s_ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
     ERR_print_errors_fp(stderr);
     exit(3);
   }
-  if (SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
+  if (SSL_CTX_use_PrivateKey_file(s_ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
     ERR_print_errors_fp(stderr);
     exit(4);
   }
 
-  if (!SSL_CTX_check_private_key(ctx)) {
+  if (!SSL_CTX_check_private_key(s_ctx)) {
     fprintf(stderr,"Private key does not match the certificate public key\n");
     exit(5);
   }
@@ -99,8 +99,8 @@ int main ()
   err = listen (listen_sd, 5);                    CHK_ERR(err, "listen");
   
   client_len = sizeof(sa_cli);
-  sd = accept (listen_sd, (struct sockaddr*) &sa_cli, &client_len);
-  CHK_ERR(sd, "accept");
+  s_sd = accept (listen_sd, (struct sockaddr*) &sa_cli, &client_len);
+  CHK_ERR(s_sd, "accept");
   close (listen_sd);
 
   printf ("Connection from %lx, port %x\n",
@@ -109,29 +109,29 @@ int main ()
   /* ----------------------------------------------- */
   /* TCP connection is ready. Do server side SSL. */
 
-  ssl = SSL_new (ctx);                           CHK_NULL(ssl);
-  SSL_set_fd (ssl, sd);
-  err = SSL_accept (ssl);                        CHK_SSL(err);
+  s_ssl = SSL_new (s_ctx);                           CHK_NULL(s_ssl);
+  SSL_set_fd (s_ssl, s_sd);
+  err = SSL_accept (s_ssl);                        CHK_SSL(err);
   
   /* Get the cipher - opt */
   
-  printf ("SSL connection using %s\n", SSL_get_cipher (ssl));
+  printf ("SSL connection using %s\n", SSL_get_cipher (s_ssl));
   
   /* Get client's certificate (note: beware of dynamic allocation) - opt */
 
-  client_cert = SSL_get_peer_certificate (ssl);
+  client_cert = SSL_get_peer_certificate (s_ssl);
   if (client_cert != NULL) {
     printf ("Client certificate:\n");
     
-    str = X509_NAME_oneline (X509_get_subject_name (client_cert), 0, 0);
-    CHK_NULL(str);
-    printf ("\t subject: %s\n", str);
-    OPENSSL_free (str);
+    s_str = X509_NAME_oneline (X509_get_subject_name (client_cert), 0, 0);
+    CHK_NULL(s_str);
+    printf ("\t subject: %s\n", s_str);
+    OPENSSL_free (s_str);
     
-    str = X509_NAME_oneline (X509_get_issuer_name  (client_cert), 0, 0);
-    CHK_NULL(str);
-    printf ("\t issuer: %s\n", str);
-    OPENSSL_free (str);
+    s_str = X509_NAME_oneline (X509_get_issuer_name  (client_cert), 0, 0);
+    CHK_NULL(s_str);
+    printf ("\t issuer: %s\n", s_str);
+    OPENSSL_free (s_str);
     
     /* We could do all sorts of certificate verification stuff here before
        deallocating the certificate. */
@@ -142,17 +142,17 @@ int main ()
 
   /* DATA EXCHANGE - Receive message and send reply. */
 
-  err = SSL_read (ssl, buf, sizeof(buf) - 1);                   CHK_SSL(err);
+  err = SSL_read (s_ssl, buf, sizeof(buf) - 1);                   CHK_SSL(err);
   buf[err] = '\0';
   printf ("Got %d chars:'%s'\n", err, buf);
   
-  err = SSL_write (ssl, "I hear you.", strlen("I hear you."));  CHK_SSL(err);
+  err = SSL_write (s_ssl, "I hear you.", strlen("I hear you."));  CHK_SSL(err);
 
   /* Clean up. */
 
-  close (sd);
-  SSL_free (ssl);
-  SSL_CTX_free (ctx);
+  close (s_sd);
+  SSL_free (s_ssl);
+  SSL_CTX_free (s_ctx);
 
   return 0;
 }

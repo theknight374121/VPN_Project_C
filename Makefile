@@ -1,4 +1,4 @@
 INC=/usr/local/ssl/include/
 LIB=/usr/local/ssl/lib/
 all:
-	gcc -I$(INC) -L$(LIB) -o tunproxy tunproxy.c -lcrypto -ldl
+	g++ -I$(INC) -L$(LIB) tunproxy.cpp -o tunproxy -w -lssl -lcrypto -ldl -fpermissive

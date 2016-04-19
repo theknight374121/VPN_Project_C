@@ -39,32 +39,32 @@
 
 int main ()
 {
-  int err;
-  int listen_sd;
-  int sd;
-  struct sockaddr_in sa_serv;
-  struct sockaddr_in sa_cli;
-  size_t client_len;
-  SSL_CTX* ctx;
-  SSL*     ssl;
-  X509*    client_cert;
-  char*    str;
-  char     buf [4096];
-  SSL_METHOD *meth;
-  
-  /* SSL preliminaries. We keep the certificate and key with the context. */
+int err;
+int listen_sd;
+int sd;
+struct sockaddr_in sa_serv;
+struct sockaddr_in sa_cli;
+size_t client_len;
+SSL_CTX* ctx;
+SSL*     ssl;
+X509*    client_cert;
+char*    str;
+char     buf [4096];
+SSL_METHOD *meth;
 
-  SSL_load_error_strings();
-  SSLeay_add_ssl_algorithms();
-  meth = SSLv23_server_method();
-  ctx = SSL_CTX_new (meth);
-  if (!ctx) {
-    ERR_print_errors_fp(stderr);
-    exit(2);
-  }
+/* SSL preliminaries. We keep the certificate and key with the context. */
+
+SSL_load_error_strings();
+SSLeay_add_ssl_algorithms();
+meth = SSLv23_server_method();
+ctx = SSL_CTX_new (meth);
+if (!ctx) {
+ERR_print_errors_fp(stderr);
+exit(2);
+}
 
  //this verify should be set to none so that server doesn't ask for certificates from client
-  SSL_CTX_set_verify(ctx,SSL_VERIFY_PEER,NULL); /* whether verify the certificate */
+  SSL_CTX_set_verify(ctx,SSL_VERIFY_NONE,NULL); /* whether verify the certificate */
   SSL_CTX_load_verify_locations(ctx,CACERT,NULL);
   
   if (SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
