@@ -482,9 +482,33 @@ int main(int argc, char *argv[])
 	}
 	
 	int pid = fork();
+	int choice;
 	if (pid>0)
 	{
 		//handle TCP Tunnels (Parent)
+		while(1){
+			printf("1-Updating the session key.\n");
+			printf("2-Change the IV.\n");
+			printf("3-Terminate the session.\n");
+			printf("Enter your option, 1,2 or 3\n");
+			scanf("%d",&choice);
+			if (choice==1)
+			{
+				//update the session key.
+			}else if (choice==2)
+			{
+				//change the IV
+			}else if (choice==3){
+				exit(1);
+			}else{
+				printf("Wrong option entered.\n");
+			}
+		}
+		
+
+
+	}else if (pid == 0){
+		//handle UDP Tunnel (Child)
 
 		//setting up the UDP Tunnel
 		s = socket(PF_INET, SOCK_DGRAM, 0);
@@ -682,15 +706,6 @@ int main(int argc, char *argv[])
 					  if (write(fd, decoutbuf, decoutlen) < 0) PERROR("write");
 					}
 				}
-
-
-
-	}else if (pid == 0){
-		//handle UDP Tunnel (Child)
-
-
-
-
 	}else{
 		printf("Error in forking!\n");
 	}
