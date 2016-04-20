@@ -523,6 +523,8 @@ int main(int argc, char *argv[])
 				}else if (choice==3)
 				{
 					//close the tunnel
+					sendinstbuf="exit";
+					write(pipe_fd[1],sendinstbuf,4);
 					exit(1);
 				}
 				
@@ -570,6 +572,18 @@ int main(int argc, char *argv[])
 		if ( bind(s,(struct sockaddr *)&sin, sizeof(sin)) < 0) PERROR("bind");
 
 		fromlen = sizeof(from);
+
+		////////////////////////////////////////////////////////////////
+		////////////	Generation Of IV starts here	///////////////
+		///////////////////////////////////////////////////////////////
+		unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
+		FILE* random = fopen("/dev/urandom","r");
+		fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
+		fclose(random);
+
+		////////////////////////////////////////////////////////////////
+		////////////	Generation Of IV ends here		///////////////
+		///////////////////////////////////////////////////////////////
 
 		if (MODE == 1) {
 			while(1) {
@@ -633,11 +647,17 @@ int main(int argc, char *argv[])
 
 				}else if (strcmp("iv",recvinstbuf)==0){
 					//change the IV for communication
-					printf("Reached the IV\n");
+					unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
+					FILE* random = fopen("/dev/urandom","r");
+					fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
+					fclose(random);
+					printf("Changed the IV.\n");
 
-				}else{
+				}else if (strcmp("exit",recvinstbuf)==0){
+
 					printf("Sent wrong keyword. Check Again! But this shoudln't happen\n");
-
+					//you need a function here that would exit the udp server program.
+					exit(1);
 				}
 			}
 			printf("Reached after calculating key. Amey\n");
@@ -649,15 +669,7 @@ int main(int argc, char *argv[])
 				if (l < 0) PERROR("read");
 				
 				////////////////////////////////////////////////////////////////
-				////////////	Generation Of IV starts here	///////////////
-				///////////////////////////////////////////////////////////////
-				unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
-				FILE* random = fopen("/dev/urandom","r");
-				fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
-				fclose(random);
-
-				////////////////////////////////////////////////////////////////
-				////////////	Generation Of IV ends here	///////////////
+				////////////	Storing the IV in the send buffer	///////////
 				///////////////////////////////////////////////////////////////
 
 				for(i =0;i<16;i++){
