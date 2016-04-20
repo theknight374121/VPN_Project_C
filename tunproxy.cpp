@@ -48,7 +48,8 @@
 #define SCACERT HOME "ca.crt"
 
 /*length of IV*/
-#define LEN 16
+#define IV_LEN 16
+#define KEY_LEN 64
 
 char MAGIC_WORD[] = "Wazaaaaaaaaaaahhhh !";
 
@@ -75,7 +76,7 @@ int main(int argc, char *argv[])
 	int outlen, tmplen, decoutlen,dectmplen, i;
 	unsigned char * encoutbuf = sendencoutbuf+16;
 	unsigned char * realbufpointer;
-	unsigned char key[] = {"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"};
+	unsigned char key[64];
 	unsigned char iv[16] = "";  
 	EVP_CIPHER_CTX *ctx,*dctx;
 	
@@ -318,10 +319,30 @@ int main(int argc, char *argv[])
 		}
 		if(flag==0) printf("no usr preseent\n");
 	CLIENT_AUTHENTICATED:
+		///////////////////////////////////////////////////////////////////
+		/////////	Handline Key exchange started 		///////////////////
+		///////////////////////////////////////////////////////////////////
+
+		unsigned char * keyptr = (unsigned char *) malloc (sizeof(unsigned char)*KEY_LEN);
+		FILE* random = fopen("/dev/urandom","r");
+		fread(keyptr,sizeof(unsigned char)*KEY_LEN,1,random);
+		fclose(random);
+
+		for (int i = 0; i < 64; ++i)
+		{
+			key[i]=keyptr[i];
+		}
+		key[64]='\0';
+		err = SSL_write (s_ssl, key, strlen(key));  CHK_SSL(err);
 		fclose(fp);                         
+
+		///////////////////////////////////////////////////////////////////
+		/////////	Handline Key exchange ended			///////////////////
+		///////////////////////////////////////////////////////////////////
+
 		
 		///////////////////////////////////////////////////////////////////
-		/////////	client side authentication done		///////////
+		/////////	client side authentication done		///////////////////
 		///////////////////////////////////////////////////////////////////
 		
 		
@@ -375,10 +396,44 @@ int main(int argc, char *argv[])
 		printf ("\t subject: %s\n", str);
 		OPENSSL_free (str);
 
+		//to get the common name of the subject
+		char * cn = strstr(str,"CN=");
+		char * email = strstr(str,"/email");
+		cn[strlen(cn)-strlen(email)]='\0';
+		cn=cn+3;
+		printf("%s\n", cn);
+
 		str = X509_NAME_oneline (X509_get_issuer_name  (server_cert),0,0);
 		CHK_NULL(str);
 		printf ("\t issuer: %s\n", str);
 		OPENSSL_free (str);
+
+		//to get the common name of the subject
+		char * cn_issuer = strstr(str,"CN=");
+		char * email_issuer = strstr(str,"/email");
+		cn_issuer[strlen(cn_issuer)-strlen(email_issuer)]='\0';
+		cn_issuer=cn_issuer+3;
+		printf("%s\n", cn_issuer);
+
+		char * teststring={"127.0.0.1"};
+		char * ip = "PKILabServer.com";
+		char * testip;
+		struct hostent *hp = gethostbyname(ip);
+		if(hp==NULL){
+		  printf("hostbyname failed\n");
+		}else 
+		{
+		  printf("hname:%s\n", hp->h_name);
+		  printf("ipaddress:%s\n", inet_ntoa( *( struct in_addr*)( hp -> h_addr)));
+		  unsigned int i=0;
+		       while ( hp -> h_addr_list[i] != NULL) {
+		          printf( "%s ", inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i])));
+		          testip=inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i]));
+		          if(strcmp(testip,teststring)==0){ printf("String Matched!\n");break;}
+		          i++;
+		       }
+		       printf("\n");
+		}
 
 		/* We could do all sorts of certificate verification stuff here before
 		deallocating the certificate. */
@@ -414,8 +469,12 @@ int main(int argc, char *argv[])
 
 		err = SSL_write (ssl, sendcred, strlen(sendcred));  CHK_SSL(err);
 
-		//err = SSL_read (ssl, buf, sizeof(buf) - 1);                     CHK_SSL(err);
-		//buf[err] = '\0';
+		err = SSL_read (ssl, buf, sizeof(buf) - 1);                     CHK_SSL(err);
+		buf[err] = '\0';
+		for (int i = 0; i < 64; ++i)
+		{		
+			key[i]=buf[i];
+		}
 		
 		///////////////////////////////////////////////////////////////////////////
 		/////////	SSL tunnel to authenticate server ends here	///////////
@@ -425,7 +484,7 @@ int main(int argc, char *argv[])
 	int pid = fork();
 	if (pid>0)
 	{
-		//handle TCP Tunnel (Parent)
+		//handle TCP Tunnels (Parent)
 
 		//setting up the UDP Tunnel
 		s = socket(PF_INET, SOCK_DGRAM, 0);
@@ -477,9 +536,9 @@ int main(int argc, char *argv[])
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of IV starts here	///////////////
 				///////////////////////////////////////////////////////////////
-				unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*LEN);
+				unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
 				FILE* random = fopen("/dev/urandom","r");
-				fread(iv,sizeof(unsigned char)*LEN,1,random);
+				fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
 				fclose(random);
 
 				////////////////////////////////////////////////////////////////
@@ -494,6 +553,8 @@ int main(int argc, char *argv[])
 				////////////////////////////////////////////////////////////////
 				////////////	Encryption of data starts here	///////////////
 				///////////////////////////////////////////////////////////////
+				printf("Key at encryption %s\n", key);
+
 				EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
 
 				if(!EVP_EncryptUpdate(ctx, encoutbuf, &outlen, buf, l))
@@ -591,6 +652,7 @@ int main(int argc, char *argv[])
 				///////////////////////////////////////////////////////////////
 
 					realbufpointer = buf + 16;
+					printf("KEY at decryption:%s\n", key);
 
 					EVP_DecryptInit_ex(dctx, EVP_aes_256_cbc(), NULL, key, iv);
 					if(!EVP_DecryptUpdate(dctx, decoutbuf, &decoutlen, realbufpointer, l-16-64))
@@ -622,7 +684,7 @@ int main(int argc, char *argv[])
 				}
 
 
-		
+
 	}else if (pid == 0){
 		//handle UDP Tunnel (Child)
 

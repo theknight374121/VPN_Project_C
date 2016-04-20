@@ -53,23 +53,6 @@ int main ()
 SSL_CTX_set_verify(ctx,SSL_VERIFY_PEER,NULL);
 SSL_CTX_load_verify_locations(ctx,CACERT,NULL);
 
-if (SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM) <= 0) {
-printf("inside certf");	  
-ERR_print_errors_fp(stderr);
-  exit(-2);
-}
-
-if (SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
-printf("inside keyf");	 	  
-ERR_print_errors_fp(stderr);
-  exit(-3);
-}
-
-if (!SSL_CTX_check_private_key(ctx)) {
-  printf("Private key does not match the certificate public keyn");
-  exit(-4);
-}
-
 /* ----------------------------------------------- */
 /* Create a socket and connect to server using normal socket calls. */
 
@@ -93,10 +76,6 @@ err = SSL_connect (ssl);                     CHK_SSL(err);
 /* Following two steps are optional and not required for
 data exchange to be successful. */
 
-/* Get the cipher - opt */
-
-printf ("SSL connection using %s\n", SSL_get_cipher (ssl));
-
 /* Get server's certificate (note: beware of dynamic allocation) - opt */
 
 server_cert = SSL_get_peer_certificate (ssl);       CHK_NULL(server_cert);
@@ -107,10 +86,45 @@ CHK_NULL(str);
 printf ("\t subject: %s\n", str);
 OPENSSL_free (str);
 
+//to get the common name of the subject
+char * cn = strstr(str,"CN=");
+char * email = strstr(str,"/email");
+cn[strlen(cn)-strlen(email)]='\0';
+cn=cn+3;
+printf("%s\n", cn);
+
 str = X509_NAME_oneline (X509_get_issuer_name  (server_cert),0,0);
 CHK_NULL(str);
 printf ("\t issuer: %s\n", str);
 OPENSSL_free (str);
+
+//to get the common name of the subject
+char * cn_issuer = strstr(str,"CN=");
+char * email_issuer = strstr(str,"/email");
+cn_issuer[strlen(cn_issuer)-strlen(email_issuer)]='\0';
+cn_issuer=cn_issuer+3;
+printf("%s\n", cn_issuer);
+
+char * teststring={"127.0.0.1"};
+char * ip = "PKILabServer.com";
+char * testip;
+struct hostent *hp = gethostbyname(ip);
+if(hp==NULL){
+  printf("hostbyname failed\n");
+}else 
+{
+  printf("hname:%s\n", hp->h_name);
+  printf("ipaddress:%s\n", inet_ntoa( *( struct in_addr*)( hp -> h_addr)));
+  unsigned int i=0;
+       while ( hp -> h_addr_list[i] != NULL) {
+          printf( "%s ", inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i])));
+          testip=inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i]));
+          if(strcmp(testip,teststring)==0){ printf("String Matched!\n");break;}
+          i++;
+       }
+       printf("\n");
+}
+
 
 /* We could do all sorts of certificate verification stuff here before
 deallocating the certificate. */
