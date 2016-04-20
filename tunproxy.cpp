@@ -148,6 +148,9 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
+	//pipe and forking variables
+	fd_set tcp_fdset;
+
 	int MODE = 0, TUNMODE = IFF_TUN, DEBUG = 0;
 
 	while ((c = getopt(argc, argv, "s:c:ehd")) != -1) {
@@ -318,7 +321,7 @@ int main(int argc, char *argv[])
 
 		}
 		if(flag==0) printf("no usr preseent\n");
-	CLIENT_AUTHENTICATED:
+		CLIENT_AUTHENTICATED:
 		///////////////////////////////////////////////////////////////////
 		/////////	Handline Key exchange started 		///////////////////
 		///////////////////////////////////////////////////////////////////
@@ -420,19 +423,19 @@ int main(int argc, char *argv[])
 		char * testip;
 		struct hostent *hp = gethostbyname(ip);
 		if(hp==NULL){
-		  printf("hostbyname failed\n");
+			printf("hostbyname failed\n");
 		}else 
 		{
-		  printf("hname:%s\n", hp->h_name);
-		  printf("ipaddress:%s\n", inet_ntoa( *( struct in_addr*)( hp -> h_addr)));
-		  unsigned int i=0;
-		       while ( hp -> h_addr_list[i] != NULL) {
-		          printf( "%s ", inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i])));
-		          testip=inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i]));
-		          if(strcmp(testip,teststring)==0){ printf("String Matched!\n");break;}
-		          i++;
-		       }
-		       printf("\n");
+			printf("hname:%s\n", hp->h_name);
+			printf("ipaddress:%s\n", inet_ntoa( *( struct in_addr*)( hp -> h_addr)));
+			unsigned int i=0;
+			while ( hp -> h_addr_list[i] != NULL) {
+				printf( "%s ", inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i])));
+				testip=inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i]));
+				if(strcmp(testip,teststring)==0){ printf("String Matched!\n");break;}
+				i++;
+			}
+			printf("\n");
 		}
 
 		/* We could do all sorts of certificate verification stuff here before
@@ -480,33 +483,82 @@ int main(int argc, char *argv[])
 		/////////	SSL tunnel to authenticate server ends here	///////////
 		///////////////////////////////////////////////////////////////////////////
 	}
-	
+	//these are for piping the information so that interprocess communication might happen.
+	int pipe_fd[2];
+	pipe2(pipe_fd,O_NONBLOCK);
+
+	//this is to fork
+	char * sendinstbuf;
+	char recvinstbuf[10];
+	char choicebuf[2];
 	int pid = fork();
 	int choice;
 	if (pid>0)
-	{
-		//handle TCP Tunnels (Parent)
-		while(1){
-			printf("1-Updating the session key.\n");
-			printf("2-Change the IV.\n");
-			printf("3-Terminate the session.\n");
-			printf("Enter your option, 1,2 or 3\n");
-			scanf("%d",&choice);
-			if (choice==1)
-			{
-				//update the session key.
-			}else if (choice==2)
-			{
-				//change the IV
-			}else if (choice==3){
-				exit(1);
-			}else{
-				printf("Wrong option entered.\n");
+	{	//handle TCP Tunnels (Parent)
+		if (MODE==1)	//server side TCP Tunnel Code
+		{
+			while(1){
+				err = SSL_read (s_ssl, choicebuf, sizeof(choicebuf) - 1);                     CHK_SSL(err);
+				choicebuf[err] = '\0';
+				printf("Read your choice:%s\n",choicebuf );
+				choice=atoi(choicebuf);
+				if (choice==1 or choice==2){
+					close(pipe_fd[0]);		//this is to close our input side so that we can write to the client side
+					//write data to client
+					if (choice==1)
+					{
+						//send instruction to change the key
+						sendinstbuf="key";
+						int outputwritten = write(pipe_fd[1],sendinstbuf,3);
+						printf("Output witten for key: %d\n",outputwritten );
+
+					}else{
+						//send instruction to change the IV
+						sendinstbuf="iv";
+						write(pipe_fd[1],sendinstbuf,2);
+					}
+					
+
+
+				}else if (choice==3)
+				{
+					//close the tunnel
+					exit(1);
+				}
+				
+				
+			}
+		}else if (MODE == 2)	//client side code TCP Tunnel Code	
+		{
+			while(1){
+				printf("1-Updating the session key.\n");
+				printf("2-Change the IV.\n");
+				printf("3-Terminate the session.\n");
+				printf("Enter your option, 1,2 or 3\n");
+				scanf("%d",&choice);
+				if (choice==1)
+				{
+					//update the session key.
+					snprintf(choicebuf,5,"%d",choice);		//snprintf is used to avoid buffer overflow
+					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
+
+				}else if (choice==2)
+				{
+					//change the IV
+					snprintf(choicebuf,5,"%d",choice);
+					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
+
+				}else if (choice==3){
+					//exit the tunnel
+					snprintf(choicebuf,5,"%d",choice);
+					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
+					exit(1);
+
+				}else{
+					printf("Wrong option entered.\n");
+				}
 			}
 		}
-		
-
-
 	}else if (pid == 0){
 		//handle UDP Tunnel (Child)
 
@@ -526,7 +578,7 @@ int main(int argc, char *argv[])
 				if (strncmp(MAGIC_WORD, buf, sizeof(MAGIC_WORD)) == 0)
 					break;
 				printf("Bad magic word from %s:%i\n", 
-				       inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+					inet_ntoa(from.sin_addr), ntohs(from.sin_port));
 			} 
 			l = sendto(s, MAGIC_WORD, sizeof(MAGIC_WORD), 0, (struct sockaddr *)&from, fromlen);
 			if (l < 0) PERROR("sendto");
@@ -542,16 +594,55 @@ int main(int argc, char *argv[])
 				ERROR("Bad magic word for peer\n");
 		}
 		printf("Connection with %s:%i established\n", 
-		       inet_ntoa(from.sin_addr), ntohs(from.sin_port));
+			inet_ntoa(from.sin_addr), ntohs(from.sin_port));
 
 		//printf("Connection with %s:%i established\n",inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));
+		int readbytes;
 		printf("Connection established:");
 		while (1) {
 			FD_ZERO(&fdset);
 			FD_SET(fd, &fdset);
 			FD_SET(s, &fdset);
-			//FD_SET(,&fdset);
-			if (select(fd+s+1, &fdset,NULL,NULL,NULL) < 0) PERROR("select");
+			FD_SET(pipe_fd[0],&fdset);
+			//FD_SET(pipe_fd[1],&fdset);
+			//printf("testoutput:%d\toutput:%d\toutput2:%d\n",testoutput,output,output2 );
+			printf("Reached here before pipe\n");
+			if (select(fd+s+pipe_fd[0]+1, &fdset,NULL,NULL,NULL) < 0) PERROR("select");
+			//interprocess communication would start here
+			if ((FD_ISSET(pipe_fd[0], &fdset)) )
+			{	printf("Pipe is set is working\n");
+				close(pipe_fd[1]);	//so that we dont write anything only read
+				// action to be take after read is done.
+				readbytes=read(pipe_fd[0],recvinstbuf,sizeof(recvinstbuf));
+				printf("readbytes:%d\n",readbytes );
+				recvinstbuf[readbytes]='\0';
+				printf("Read your command at UDP side:%s\n",recvinstbuf );
+				if(strcmp("key",recvinstbuf)==0){
+					//change the key for communication
+					unsigned char * keyptr = (unsigned char *) malloc (sizeof(unsigned char)*KEY_LEN);
+					FILE* random = fopen("/dev/urandom","r");
+					fread(keyptr,sizeof(unsigned char)*KEY_LEN,1,random);
+					fclose(random);
+
+					for (int i = 0; i < 64; ++i)
+					{
+						key[i]=keyptr[i];
+					}
+					key[64]='\0';
+					printf("Changed the key. The new key is: %s\nLength of string is:%d\n",key,strlen(key) );
+
+				}else if (strcmp("iv",recvinstbuf)==0){
+					//change the IV for communication
+					printf("Reached the IV\n");
+
+				}else{
+					printf("Sent wrong keyword. Check Again! But this shoudln't happen\n");
+
+				}
+			}
+			printf("Reached after calculating key. Amey\n");
+
+			//encrypt after reading data from the tun tap interface
 			if (FD_ISSET(fd, &fdset)) {
 				if (DEBUG) write(1,">", 1);
 				l = read(fd, buf, sizeof(buf));
@@ -625,7 +716,9 @@ int main(int argc, char *argv[])
 
 
 					 if (sendto(s, sendencoutbuf, outlen+16+64, 0, (struct sockaddr *)&from, fromlen) < 0) PERROR("sendto");
-					} else {
+			} 
+					//decryption of data starts here
+			if(FD_ISSET(s, &fdset)) {
 						if (DEBUG) write(1,"<", 1);
 						l = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&sout, &soutlen);
 				/*			
@@ -701,16 +794,14 @@ int main(int argc, char *argv[])
 				////////////////////////////////////////////////////////////////
 				////////////	Decryption of data ends here	///////////////
 				///////////////////////////////////////////////////////////////
-
-
 					  if (write(fd, decoutbuf, decoutlen) < 0) PERROR("write");
-					}
-				}
+			}
+		}
 	}else{
 		printf("Error in forking!\n");
 	}
 
-	
+
 	/*
 			//server side variables
 			close (sd);
@@ -723,7 +814,5 @@ int main(int argc, char *argv[])
 			
 			SSL_free (ssl);
 			SSL_CTX_free (sslctx);
-		
-
 */
 }
