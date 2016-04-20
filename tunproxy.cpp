@@ -478,7 +478,7 @@ int main(int argc, char *argv[])
 		{		
 			key[i]=buf[i];
 		}
-		
+		key[64]='\0';
 		///////////////////////////////////////////////////////////////////////////
 		/////////	SSL tunnel to authenticate server ends here	///////////
 		///////////////////////////////////////////////////////////////////////////
@@ -489,7 +489,8 @@ int main(int argc, char *argv[])
 
 	//this is to fork
 	char * sendinstbuf;
-	char recvinstbuf[10];
+	char recvinstbuf[100];
+	char clirecvinstbuf[100];
 	char choicebuf[2];
 	int pid = fork();
 	int choice;
@@ -506,10 +507,23 @@ int main(int argc, char *argv[])
 					close(pipe_fd[0]);		//this is to close our input side so that we can write to the client side
 					//write data to client
 					if (choice==1)
-					{
-						//send instruction to change the key
-						sendinstbuf="key";
-						int outputwritten = write(pipe_fd[1],sendinstbuf,3);
+					{	printf("Inside choice 1\n");
+						//change the key for communication
+						unsigned char * keyptr = (unsigned char *) malloc (sizeof(unsigned char)*KEY_LEN);
+						FILE* random = fopen("/dev/urandom","r");
+						fread(keyptr,sizeof(unsigned char)*KEY_LEN,1,random);
+						fclose(random);
+						printf("Calculated the new key.:%s\n",keyptr );
+						for (int i = 0; i < 64; ++i)
+						{
+							recvinstbuf[i]=keyptr[i];
+						}
+						recvinstbuf[64]='\0';
+						printf("Changed the key. The new key is: %s\nLength of string is:%d\n",recvinstbuf,strlen(recvinstbuf) );
+
+						//send key to child and the client
+						err= SSL_write(s_ssl,recvinstbuf,64);
+						int outputwritten = write(pipe_fd[1],recvinstbuf,64);
 						printf("Output witten for key: %d\n",outputwritten );
 
 					}else{
@@ -543,6 +557,9 @@ int main(int argc, char *argv[])
 					//update the session key.
 					snprintf(choicebuf,5,"%d",choice);		//snprintf is used to avoid buffer overflow
 					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
+					err = SSL_read(ssl,clirecvinstbuf,64);	CHK_SSL(err);
+					clirecvinstbuf[err]='\0';
+					write(pipe_fd[1],clirecvinstbuf,64);
 
 				}else if (choice==2)
 				{
@@ -631,19 +648,20 @@ int main(int argc, char *argv[])
 				printf("readbytes:%d\n",readbytes );
 				recvinstbuf[readbytes]='\0';
 				printf("Read your command at UDP side:%s\n",recvinstbuf );
-				if(strcmp("key",recvinstbuf)==0){
-					//change the key for communication
-					unsigned char * keyptr = (unsigned char *) malloc (sizeof(unsigned char)*KEY_LEN);
-					FILE* random = fopen("/dev/urandom","r");
-					fread(keyptr,sizeof(unsigned char)*KEY_LEN,1,random);
-					fclose(random);
-
+				if(readbytes==64){
+					//receive the key and send to child
 					for (int i = 0; i < 64; ++i)
-					{
-						key[i]=keyptr[i];
-					}
+						{
+							key[i]=recvinstbuf[i];
+						}	
 					key[64]='\0';
-					printf("Changed the key. The new key is: %s\nLength of string is:%d\n",key,strlen(key) );
+					if (MODE==1)		
+					{
+						printf("server side new key:%s\n",key);
+					}else{
+						printf("Clientside new key:%s\n", key );
+					}
+					
 
 				}else if (strcmp("iv",recvinstbuf)==0){
 					//change the IV for communication
@@ -660,10 +678,8 @@ int main(int argc, char *argv[])
 					exit(1);
 				}
 			}
-			printf("Reached after calculating key. Amey\n");
-
 			//encrypt after reading data from the tun tap interface
-			if (FD_ISSET(fd, &fdset)) {
+			else if (FD_ISSET(fd, &fdset)) {
 				if (DEBUG) write(1,">", 1);
 				l = read(fd, buf, sizeof(buf));
 				if (l < 0) PERROR("read");
@@ -680,7 +696,8 @@ int main(int argc, char *argv[])
 				////////////////////////////////////////////////////////////////
 				////////////	Encryption of data starts here	///////////////
 				///////////////////////////////////////////////////////////////
-				printf("Key at encryption %s\n", key);
+				key[64]='\0';
+				printf("Key at encryption %s\nlength of key:%d\n", key,strlen(key));
 
 				EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
 
@@ -721,7 +738,7 @@ int main(int argc, char *argv[])
 					 for(i =0;i < md_len;i++){
 					 	ptr+=sprintf(ptr,"%02x",md_value[i]);
 					 }
-
+					
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of hash ends here	///////////////
 				///////////////////////////////////////////////////////////////
@@ -730,7 +747,7 @@ int main(int argc, char *argv[])
 					 if (sendto(s, sendencoutbuf, outlen+16+64, 0, (struct sockaddr *)&from, fromlen) < 0) PERROR("sendto");
 			} 
 					//decryption of data starts here
-			if(FD_ISSET(s, &fdset)) {
+			else if(FD_ISSET(s, &fdset)) {
 						if (DEBUG) write(1,"<", 1);
 						l = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&sout, &soutlen);
 				/*			
