@@ -1,0 +1,86 @@
+commit fc3e06b2f524c149f2b12ba8be495ebd12ddef73
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Wed Apr 20 16:06:25 2016 -0700
+
+    Due to last changes in code, packets not going through the tunnel.
+    Need to fix that.
+
+commit b8838e5f5309ed21880428f5eb64071c94aa5527
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Wed Apr 20 14:04:23 2016 -0700
+
+    IV can be exhanged on the fly. Exit has some problem at the child side of UDP tunnel.
+    Sequence number concept not implemented.
+
+commit 677073148034f87b6178200757e91170b5ee0bf0
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Wed Apr 20 06:15:55 2016 -0700
+
+    Pipe works. User can set the key on the fly.
+    User can't change the IV yet.
+    Exit not yet implemented properly.
+
+commit 954e3d9c60aee91921fab7f81e576b9b4fc0d2ba
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Wed Apr 20 01:18:17 2016 -0700
+
+    Added the menu to the TCP tunnel with exit statement.
+
+commit 1dcd539eb5b14b17f48a2c714797828571be4493
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Tue Apr 19 21:35:25 2016 -0700
+
+    Added CN comparing functionality.
+    Added Key Exchange
+
+commit 58a7e760b94dba3134fc6f1bfa7eba1b6508d7b9
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Tue Apr 19 16:09:32 2016 -0700
+
+    Forking works properly.
+    Two processes created successfully and running in parallel.
+
+commit 9d2924449b1b1fdaa089cd129c886c25bcc26cf4
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Mon Apr 18 19:43:28 2016 -0700
+
+    Added OPENSSL tunnel. Validation works of client within server.
+    Validation of server pending.
+    Tunnel doesn't continue to UDP.
+
+commit 59b3a289c15ac75aae6e95a79ec4c381f637e9e4
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Mon Apr 18 17:12:12 2016 -0700
+
+    tested SSL connectivity in different folder
+    About to start editing the tunproxy file.
+
+commit a082dddad215faa9f6c0200230bd36bcb242b955
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Mon Apr 18 15:46:18 2016 -0700
+
+    Done with client authentication without OPENSSL. But validation code is correct.
+
+commit 870d4e072d4c61fcdde4971b63cbcbc61521f978
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Mon Apr 18 13:26:06 2016 -0700
+
+    added some milestone 3 code. Client authentication. But not yet complete
+
+commit 4f54fb451dc60d9ea96db9757306d54523455a32
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Sun Apr 17 19:37:41 2016 -0700
+
+    moved my prog to tunproxy. Everything works fine.
+
+commit 6ec491601642df06c530de0cd486c5a3167ba1b3
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Sun Apr 17 18:07:06 2016 -0700
+
+    milestone 1 fixed with change in adapter settings
+
+commit aa484eec5270f2b94544c2a97e68f74976063ee9
+Author: Seed <seed@ubuntu.(none)>
+Date:   Sun Apr 17 13:02:07 2016 -0700
+
+    Completed till milestone2 and did some Initial PKI tasks
