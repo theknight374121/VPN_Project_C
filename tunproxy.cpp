@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <signal.h>
 
 //Hashing and encryption definitions
 #define PERROR(x) do { perror(x); exit(1); } while (0)
@@ -43,6 +44,7 @@
 /* define HOME to be dir for key and cert files... */
 #define HOME "./"
 /* Make these what you want for cert & key files */
+char MAGIC_WORD[] = "Waz";
 #define SCERTF  HOME "server.crt"
 #define SKEYF  HOME  "server.key"
 #define SCACERT HOME "ca.crt"
@@ -50,9 +52,6 @@
 /*length of IV*/
 #define IV_LEN 16
 #define KEY_LEN 64
-
-char MAGIC_WORD[] = "Wazaaaaaaaaaaahhhh !";
-
 
 void usage()
 {
@@ -265,7 +264,6 @@ int main(int argc, char *argv[])
 		if(p)	strcpy(username,p);
 		p = strtok(NULL, "|");
 		if(p)	strcpy(password,p);
-		printf("username:%s\npasssword:%s\n",username,password);
 		if( (fp=fopen("userdb.txt","r")) == NULL )
 			{printf("File can not open !\n"); exit(1);}
 
@@ -285,21 +283,21 @@ int main(int argc, char *argv[])
 				}
 				combpwd[10+strlen(password)]='\0';
 
-						//set value of message digest used
+				//set value of message digest used
 				md = EVP_sha256();
 				if(!md) {
 					printf("Unknown message digest %s\n", "md5");
 					exit(1);
 				}
 
-						//Hash the initial message to use the hash for further calculations
+				//Hash the initial message to use the hash for further calculations
 				mdctx = EVP_MD_CTX_create();
 				EVP_DigestInit_ex(mdctx, md, NULL);
 				EVP_DigestUpdate(mdctx, combpwd, strlen(combpwd));
 				EVP_DigestFinal_ex(mdctx, md_value2, &md_len2);
 				EVP_MD_CTX_destroy(mdctx);
 
-						//Printing the calculated hash.
+				//Printing the calculated hash.
 				storeptr=storedig;
 
 				for(i = 0; i < md_len2; i++){
@@ -315,6 +313,7 @@ int main(int argc, char *argv[])
 				}
 				else{
 					printf("incorrect password\n");
+					exit(1);
 					flag=1;
 				}
 			}
@@ -392,11 +391,9 @@ int main(int argc, char *argv[])
 		/* Get server's certificate (note: beware of dynamic allocation) - opt */
 
 		server_cert = SSL_get_peer_certificate (ssl);       CHK_NULL(server_cert);
-		printf ("Server certificate:\n");
 
 		str = X509_NAME_oneline (X509_get_subject_name (server_cert),0,0);
 		CHK_NULL(str);
-		printf ("\t subject: %s\n", str);
 		OPENSSL_free (str);
 
 		//to get the common name of the subject
@@ -404,35 +401,26 @@ int main(int argc, char *argv[])
 		char * email = strstr(str,"/email");
 		cn[strlen(cn)-strlen(email)]='\0';
 		cn=cn+3;
-		printf("%s\n", cn);
+		char cnamebuf[20];
+		for (int i = 0; i < strlen(cn); ++i)
+		{
+			cnamebuf[i]=cn[i];
+		}
+		cnamebuf[strlen(cn)]='\0';
 
 		str = X509_NAME_oneline (X509_get_issuer_name  (server_cert),0,0);
 		CHK_NULL(str);
-		printf ("\t issuer: %s\n", str);
 		OPENSSL_free (str);
 
-		//to get the common name of the subject
-		char * cn_issuer = strstr(str,"CN=");
-		char * email_issuer = strstr(str,"/email");
-		cn_issuer[strlen(cn_issuer)-strlen(email_issuer)]='\0';
-		cn_issuer=cn_issuer+3;
-		printf("%s\n", cn_issuer);
-
-		char * teststring={"127.0.0.1"};
-		char * ip = "PKILabServer.com";
 		char * testip;
-		struct hostent *hp = gethostbyname(ip);
+		struct hostent *hp = gethostbyname(cnamebuf);
 		if(hp==NULL){
 			printf("hostbyname failed\n");
 		}else 
-		{
-			printf("hname:%s\n", hp->h_name);
-			printf("ipaddress:%s\n", inet_ntoa( *( struct in_addr*)( hp -> h_addr)));
-			unsigned int i=0;
+		{	unsigned int i=0;
 			while ( hp -> h_addr_list[i] != NULL) {
-				printf( "%s ", inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i])));
 				testip=inet_ntoa( *( struct in_addr*)( hp -> h_addr_list[i]));
-				if(strcmp(testip,teststring)==0){ printf("String Matched!\n");break;}
+				if(strcmp(testip,ip)==0){ printf("CName Validated!\n");break;}
 				i++;
 			}
 			printf("\n");
@@ -464,7 +452,6 @@ int main(int argc, char *argv[])
 			sendcred[credptr+i]=password[i];
 		}
 		sendcred[credptr+strlen(password)]='\0';
-		printf("sent:%s",sendcred);
 		
 		//////////////////////////////////////////////////////////////////////
 		/////////	done asking user for username and password	//////
@@ -507,24 +494,27 @@ int main(int argc, char *argv[])
 					close(pipe_fd[0]);		//this is to close our input side so that we can write to the client side
 					//write data to client
 					if (choice==1)
-					{	printf("Inside choice 1\n");
-						//change the key for communication
+					{	//change the key for communication
 						unsigned char * keyptr = (unsigned char *) malloc (sizeof(unsigned char)*KEY_LEN);
 						FILE* random = fopen("/dev/urandom","r");
 						fread(keyptr,sizeof(unsigned char)*KEY_LEN,1,random);
 						fclose(random);
-						printf("Calculated the new key.:%s\n",keyptr );
+						printf("Calculated the new key.:");
+						for (int i = 0; i < 32; ++i)
+						{
+							printf("%02x",keyptr[i]);
+						}
+						printf("\n");
 						for (int i = 0; i < 64; ++i)
 						{
 							recvinstbuf[i]=keyptr[i];
 						}
 						recvinstbuf[64]='\0';
-						printf("Changed the key. The new key is: %s\nLength of string is:%d\n",recvinstbuf,strlen(recvinstbuf) );
-
+						
 						//send key to child and the client
 						err= SSL_write(s_ssl,recvinstbuf,64);
 						int outputwritten = write(pipe_fd[1],recvinstbuf,64);
-						printf("Output witten for key: %d\n",outputwritten );
+						
 
 					}else{
 						//send instruction to change the IV
@@ -532,13 +522,16 @@ int main(int argc, char *argv[])
 						write(pipe_fd[1],sendinstbuf,2);
 					}
 					
-
-
 				}else if (choice==3)
 				{
 					//close the tunnel
 					sendinstbuf="exit";
-					write(pipe_fd[1],sendinstbuf,4);
+					kill(pid, SIGTERM);
+					//server side variables
+					close (sd);
+					SSL_free (s_ssl);
+					SSL_CTX_free (s_ctx);
+					SSL_shutdown (ssl);  // send SSL/TLS close_notify 
 					exit(1);
 				}
 				
@@ -568,9 +561,14 @@ int main(int argc, char *argv[])
 					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
 
 				}else if (choice==3){
+					char exitcmd = "exit";
 					//exit the tunnel
 					snprintf(choicebuf,5,"%d",choice);
 					err = SSL_write(ssl,choicebuf,sizeof(choicebuf)-1);	CHK_SSL(err);
+					kill(pid, SIGTERM);
+					//client side variables
+					SSL_free (ssl);
+					SSL_CTX_free (sslctx);
 					exit(1);
 
 				}else{
@@ -589,18 +587,6 @@ int main(int argc, char *argv[])
 		if ( bind(s,(struct sockaddr *)&sin, sizeof(sin)) < 0) PERROR("bind");
 
 		fromlen = sizeof(from);
-
-		////////////////////////////////////////////////////////////////
-		////////////	Generation Of IV starts here	///////////////
-		///////////////////////////////////////////////////////////////
-		unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
-		FILE* random = fopen("/dev/urandom","r");
-		fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
-		fclose(random);
-
-		////////////////////////////////////////////////////////////////
-		////////////	Generation Of IV ends here		///////////////
-		///////////////////////////////////////////////////////////////
 
 		if (MODE == 1) {
 			while(1) {
@@ -629,39 +615,25 @@ int main(int argc, char *argv[])
 
 		//printf("Connection with %s:%i established\n",inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));
 		int readbytes;
-		printf("Connection established:");
 		while (1) {
 			FD_ZERO(&fdset);
 			FD_SET(fd, &fdset);
 			FD_SET(s, &fdset);
 			FD_SET(pipe_fd[0],&fdset);
-			//FD_SET(pipe_fd[1],&fdset);
-			//printf("testoutput:%d\toutput:%d\toutput2:%d\n",testoutput,output,output2 );
-			printf("Reached here before pipe\n");
 			if (select(fd+s+pipe_fd[0]+1, &fdset,NULL,NULL,NULL) < 0) PERROR("select");
 			//interprocess communication would start here
 			if ((FD_ISSET(pipe_fd[0], &fdset)) )
-			{	printf("Pipe is set is working\n");
-				close(pipe_fd[1]);	//so that we dont write anything only read
+			{	close(pipe_fd[1]);	//so that we dont write anything only read
 				// action to be take after read is done.
 				readbytes=read(pipe_fd[0],recvinstbuf,sizeof(recvinstbuf));
-				printf("readbytes:%d\n",readbytes );
 				recvinstbuf[readbytes]='\0';
-				printf("Read your command at UDP side:%s\n",recvinstbuf );
 				if(readbytes==64){
 					//receive the key and send to child
 					for (int i = 0; i < 64; ++i)
 						{
 							key[i]=recvinstbuf[i];
 						}	
-					key[64]='\0';
-					if (MODE==1)		
-					{
-						printf("server side new key:%s\n",key);
-					}else{
-						printf("Clientside new key:%s\n", key );
-					}
-					
+					key[64]='\0';					
 
 				}else if (strcmp("iv",recvinstbuf)==0){
 					//change the IV for communication
@@ -683,6 +655,23 @@ int main(int argc, char *argv[])
 				if (DEBUG) write(1,">", 1);
 				l = read(fd, buf, sizeof(buf));
 				if (l < 0) PERROR("read");
+
+				////////////////////////////////////////////////////////////////
+				////////////	Generation Of IV starts here	///////////////
+				///////////////////////////////////////////////////////////////
+				unsigned char * ivbuff = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
+				FILE* random = fopen("/dev/urandom","r");
+				fread(ivbuff,sizeof(unsigned char)*IV_LEN,1,random);
+				fclose(random);
+
+				for (int i = 0; i < 16; ++i)
+				{
+					iv[i]=ivbuff[i];
+				}
+
+				////////////////////////////////////////////////////////////////
+				////////////	Generation Of IV ends here		///////////////
+				///////////////////////////////////////////////////////////////
 				
 				////////////////////////////////////////////////////////////////
 				////////////	Storing the IV in the send buffer	///////////
@@ -691,14 +680,13 @@ int main(int argc, char *argv[])
 				for(i =0;i<16;i++){
 					sendencoutbuf[i]=iv[i];
 				}
-					//printf("IV at enc side:%s\n",iv);
+					printf("IV at enc side:%s\n",iv);
 
 				////////////////////////////////////////////////////////////////
 				////////////	Encryption of data starts here	///////////////
 				///////////////////////////////////////////////////////////////
 				key[64]='\0';
-				printf("Key at encryption %s\nlength of key:%d\n", key,strlen(key));
-
+				
 				EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
 
 				if(!EVP_EncryptUpdate(ctx, encoutbuf, &outlen, buf, l))
@@ -750,19 +738,13 @@ int main(int argc, char *argv[])
 			else if(FD_ISSET(s, &fdset)) {
 						if (DEBUG) write(1,"<", 1);
 						l = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&sout, &soutlen);
-				/*			
-				if ((sout.sin_addr.s_addr != from.sin_addr.s_addr) || (sout.sin_port != from.sin_port))
-					printf("Got packet from  %s:%i instead of %s:%i\n", 
-					       inet_ntoa(sout.sin_addr.s_addr), ntohs(sout.sin_port),
-					       inet_ntoa(from.sin_addr.s_addr), ntohs(from.sin_port));
-				*/
 				////////////////////////////////////////////////////////////////
 				////////////	Retrieving the IV starts here	///////////////
 				///////////////////////////////////////////////////////////////
 					       for(i =0;i<16;i++){
 					       	iv[i]=buf[i];
 					       }
-					//printf("IV at dec side:%s\n",iv);
+					printf("IV at dec side:%s\n",iv);
 				////////////////////////////////////////////////////////////////
 				////////////	Retrieving the IV ends here	///////////////
 				///////////////////////////////////////////////////////////////
@@ -782,13 +764,11 @@ int main(int argc, char *argv[])
 					       	printbuf2[j]=buf[i];
 					       }
 					       printbuf2[64]='\0';
-					/*
-					if(strcmp(printbuf,printbuf2)==0){
-					   printf("it matches, p:%s\np1:%s\n",printbuf,printbuf2);
-					}else{
-						printf("it does not matches, p:%s\np1:%s\n",printbuf,printbuf2);
+					
+					if(strcmp(printbuf,printbuf2)!=0){
+					   printf("it does not matches, p:%s\np1:%s\n",printbuf,printbuf2);
 					}
-					*/
+					
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of hash ends here	///////////////
 				///////////////////////////////////////////////////////////////
@@ -798,8 +778,7 @@ int main(int argc, char *argv[])
 				///////////////////////////////////////////////////////////////
 
 					realbufpointer = buf + 16;
-					printf("KEY at decryption:%s\n", key);
-
+					
 					EVP_DecryptInit_ex(dctx, EVP_aes_256_cbc(), NULL, key, iv);
 					if(!EVP_DecryptUpdate(dctx, decoutbuf, &decoutlen, realbufpointer, l-16-64))
 					{
@@ -832,16 +811,9 @@ int main(int argc, char *argv[])
 
 
 	/*
-			//server side variables
-			close (sd);
-			SSL_free (s_ssl);
-			SSL_CTX_free (s_ctx);
-	SSL_shutdown (ssl);  // send SSL/TLS close_notify 
+			
 
 		
-			//client side variables
 			
-			SSL_free (ssl);
-			SSL_CTX_free (sslctx);
 */
 }

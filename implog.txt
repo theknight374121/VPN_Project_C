@@ -1,3 +1,13 @@
+commit 302f8317ee3d8cd77a1f4b6f5cbb8dbe162d19dd
+Author: 5en5ei <theknight374121@gmail.com>
+Date:   Wed Apr 20 16:30:36 2016 -0700
+
+    Everything works just fine.
+    IV can be changed on the fly.
+    Key can be changed on the fly.
+    Exit needs some fixation.
+    Code needs to be modularized and cleared.
+
 commit fc3e06b2f524c149f2b12ba8be495ebd12ddef73
 Author: 5en5ei <theknight374121@gmail.com>
 Date:   Wed Apr 20 16:06:25 2016 -0700
