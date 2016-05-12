@@ -620,6 +620,7 @@ int main(int argc, char *argv[])
 			FD_SET(fd, &fdset);
 			FD_SET(s, &fdset);
 			FD_SET(pipe_fd[0],&fdset);
+			
 			if (select(fd+s+pipe_fd[0]+1, &fdset,NULL,NULL,NULL) < 0) PERROR("select");
 			//interprocess communication would start here
 			if ((FD_ISSET(pipe_fd[0], &fdset)) )
@@ -659,20 +660,15 @@ int main(int argc, char *argv[])
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of IV starts here	///////////////
 				///////////////////////////////////////////////////////////////
-				unsigned char * ivbuff = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
+				unsigned char * iv = (unsigned char *) malloc (sizeof(unsigned char)*IV_LEN);
 				FILE* random = fopen("/dev/urandom","r");
-				fread(ivbuff,sizeof(unsigned char)*IV_LEN,1,random);
+				fread(iv,sizeof(unsigned char)*IV_LEN,1,random);
 				fclose(random);
-
-				for (int i = 0; i < 16; ++i)
-				{
-					iv[i]=ivbuff[i];
-				}
 
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of IV ends here		///////////////
 				///////////////////////////////////////////////////////////////
-				
+
 				////////////////////////////////////////////////////////////////
 				////////////	Storing the IV in the send buffer	///////////
 				///////////////////////////////////////////////////////////////
@@ -680,13 +676,13 @@ int main(int argc, char *argv[])
 				for(i =0;i<16;i++){
 					sendencoutbuf[i]=iv[i];
 				}
-					printf("IV at enc side:%s\n",iv);
+					//printf("IV at enc side:%s\n",iv);
 
 				////////////////////////////////////////////////////////////////
 				////////////	Encryption of data starts here	///////////////
 				///////////////////////////////////////////////////////////////
 				key[64]='\0';
-				
+				//printf("Key before encryption:%s\n",key );
 				EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
 
 				if(!EVP_EncryptUpdate(ctx, encoutbuf, &outlen, buf, l))
@@ -725,6 +721,7 @@ int main(int argc, char *argv[])
 					 unsigned char * ptr = sendencoutbuf+16+outlen;
 					 for(i =0;i < md_len;i++){
 					 	ptr+=sprintf(ptr,"%02x",md_value[i]);
+					 	printf("%02x",md_value[i]);
 					 }
 					
 				////////////////////////////////////////////////////////////////
@@ -744,7 +741,7 @@ int main(int argc, char *argv[])
 					       for(i =0;i<16;i++){
 					       	iv[i]=buf[i];
 					       }
-					printf("IV at dec side:%s\n",iv);
+					//printf("IV at dec side:%s\n",iv);
 				////////////////////////////////////////////////////////////////
 				////////////	Retrieving the IV ends here	///////////////
 				///////////////////////////////////////////////////////////////
@@ -764,11 +761,11 @@ int main(int argc, char *argv[])
 					       	printbuf2[j]=buf[i];
 					       }
 					       printbuf2[64]='\0';
-					
-					if(strcmp(printbuf,printbuf2)!=0){
+					/*
+					if(strcmp(printbuf,printbuf2)==0){
 					   printf("it does not matches, p:%s\np1:%s\n",printbuf,printbuf2);
 					}
-					
+					*/
 				////////////////////////////////////////////////////////////////
 				////////////	Generation Of hash ends here	///////////////
 				///////////////////////////////////////////////////////////////
@@ -778,7 +775,6 @@ int main(int argc, char *argv[])
 				///////////////////////////////////////////////////////////////
 
 					realbufpointer = buf + 16;
-					
 					EVP_DecryptInit_ex(dctx, EVP_aes_256_cbc(), NULL, key, iv);
 					if(!EVP_DecryptUpdate(dctx, decoutbuf, &decoutlen, realbufpointer, l-16-64))
 					{
